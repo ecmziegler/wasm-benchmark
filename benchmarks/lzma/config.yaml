@@ -1,0 +1,4 @@
+build:
+    binary: lzma_bench
+execution:
+    runs: 5

@@ -1,0 +1,4 @@
+build:
+    binary: sqlite_bench
+execution:
+    runs: 1

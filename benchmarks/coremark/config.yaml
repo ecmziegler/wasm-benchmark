@@ -1,0 +1,4 @@
+build:
+    binary: coremark_bench
+execution:
+    runs: 1

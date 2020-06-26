@@ -1,0 +1,4 @@
+build:
+    binary: box2d_bench
+execution:
+    runs: 5

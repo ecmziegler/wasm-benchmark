@@ -1,0 +1,4 @@
+build:
+    binary: zlib_bench
+execution:
+    runs: 5
