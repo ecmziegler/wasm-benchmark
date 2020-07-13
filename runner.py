@@ -320,7 +320,12 @@ class Benchmark:
 		summary_colors = []
 		summary_ticks = []
 		summary_labels = []
-		summary_legend_labels = {}
+		summary_legend_labels = {env: color for env, color in {
+				'native': 'gray',
+				'd8': 'cornflowerblue',
+				'node': 'darkorange',
+				'mozjs': 'limegreen'
+			}.items() if env in self.envs}
 		position = 0
 		with open(os.path.join(base_dir, 'out', self.name, 'overview.html'), 'w') as overview:
 			overview.write('<html>\n<head>\n\t<title>{benchmark} benchmark</title>\n</head><body>\n'.format(benchmark = self.name))
@@ -351,24 +356,25 @@ class Benchmark:
 					summary_legend_labels['native'] = 'gray'
 					analysis.plot(progress_axes, profile.quantity, scale, 'native', color = 'gray')
 
-				# d8 execution
-				if 'd8' in self.envs:
-					with open(os.path.join(base_dir, 'out', self.name, '{}_d8.txt'.format(profile.name)), 'r') as file:
+				# Other executions
+				for env in self.envs:
+					if env == 'native':
+						continue
+					with open(os.path.join(base_dir, 'out', self.name, '{profile}_{env}.txt'.format(profile = profile.name, env = env)), 'r') as file:
 						analysis = Analysis(file)
 					summary = analysis.summaries[profile.name]
 					base_performances.append(summary.peak_performance * (1.0 - summary.effective_start_up_time / summary.duration) / scale)
 					additional_performances.append(summary.peak_performance / scale - base_performances[-1])
 					start_up_times.append(summary.start_up_time/1000)
 					warm_up_times.append(summary.warm_up_time/1000)
-					summary_colors.append('cornflowerblue')
+					summary_colors.append(summary_legend_labels[env])
 					summary_positions.append(position)
 					position += 1
-					summary_legend_labels['d8'] = 'cornflowerblue'
-					analysis.plot(progress_axes, profile.quantity, scale, 'd8', color = 'cornflowerblue')
+					analysis.plot(progress_axes, profile.quantity, scale, env, color = summary_legend_labels[env])
 					
 					if len(analysis.events) > 0:
 						events = progress_axes.secondary_xaxis(-0.2)
-						events.set_xlabel('d8 events')
+						events.set_xlabel('{} events'.format(env))
 						events.set_xticks([event.time/1000 for event in analysis.events])
 						events.set_xticklabels([event.event_id for event in analysis.events])
 					
