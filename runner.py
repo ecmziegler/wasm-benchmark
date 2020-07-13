@@ -105,9 +105,11 @@ class Analysis:
 		axes.plot([progress.time for progress in self.progress[progress_id]], [progress.work for progress in self.progress[progress_id]])
 
 class Benchmark:
-	def __init__ (self, name, envs, d8):
+	def __init__ (self, name, envs, d8, node, mozjs):
 		self.name = name
 		self.d8 = d8
+		self.node = node
+		self.mozjs = mozjs
 		with open(os.path.join('benchmarks', self.name, 'config.yaml'), 'r') as file:
 			config = yaml_load(file, Loader = YamlLoader)
 		if 'build' in config:
@@ -159,7 +161,7 @@ class Benchmark:
 			subprocess.call(['make'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in envs:
+		if 'd8' in envs or 'node' in envs or 'mozjs' in envs:
 			build_dir = os.path.join(base_dir, 'out', 'tools', 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building helper tools with Emscripten')
@@ -176,7 +178,7 @@ class Benchmark:
 			self.call(self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in self.envs:
+		if 'd8' in self.envs or 'node' in self.envs or 'mozjs' in self.envs:
 			build_dir = os.path.dirname(self.wasm_binary)
 			os.makedirs(os.path.dirname(self.wasm_binary), exist_ok = True)
 			print('Building {name} with Emscripten'.format(name = self.name))
@@ -202,7 +204,52 @@ class Benchmark:
 				return_code = self.call([
 					self.d8,
 					'-e', 'const recorder_js = "{recorder}.mjs"; const wasm_js = "{module}.mjs"; const runs = {runs}; const verbose = {verbose};'.format(recorder = os.path.join(base_dir, 'out', 'tools', 'wasm', 'recorder'), module = self.wasm_binary, runs = self.runs, verbose = 'true' if self.verbose else 'false'),
-					os.path.join(base_dir, 'd8_wrapper.js')
+					os.path.join(base_dir, 'wrapper.js')
+				], cwd = os.path.dirname(self.wasm_binary), stdout = output_file)
+			if return_code != 0:
+				sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
+				sys.stderr.flush()
+
+		# Node execution
+		if 'node' in self.envs:
+			print('Benchmarking {name} in node'.format(name = self.name))
+			with open(os.path.join(base_dir, 'out', self.name, 'benchmark_node.txt'), 'w') as output_file:
+				return_code = self.call([
+					self.node,
+					'-e', '''const recorder_js = "{recorder}.mjs";
+						const wasm_js = "{module}.mjs";
+						const runs = {runs};
+						const verbose = {verbose};
+						var print = console.log;
+						var printErr = console.error;
+						var quit = process.exit;
+						eval(fs.readFileSync("{script}")+"");'''.format(
+						 	recorder = os.path.join(base_dir, 'out', 'tools', 'wasm', 'recorder'),
+						 	module = self.wasm_binary,
+							runs = self.runs,
+							verbose = 'true' if self.verbose else 'false',
+							script = os.path.join(base_dir, 'wrapper.js')),
+				], cwd = os.path.dirname(self.wasm_binary), stdout = output_file)
+			if return_code != 0:
+				sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
+				sys.stderr.flush()
+
+
+		# mozjs execution
+		if 'mozjs' in self.envs:
+			print('Benchmarking {name} in mozjs'.format(name = self.name))
+			with open(os.path.join(base_dir, 'out', self.name, 'benchmark_mozjs.txt'), 'w') as output_file:
+				return_code = self.call([
+					self.mozjs,
+					'-e', '''const recorder_js = "{recorder}.mjs";
+						 const wasm_js = "{module}.mjs";
+						 const runs = {runs};
+						 const verbose = {verbose};'''.format(
+						 	recorder = os.path.join(base_dir, 'out', 'tools', 'wasm', 'recorder'),
+						 	module = self.wasm_binary,
+							runs = self.runs,
+							verbose = 'true' if self.verbose else 'false'),
+					'-f', os.path.join(base_dir, 'wrapper.js')
 				], cwd = os.path.dirname(self.wasm_binary), stdout = output_file)
 			if return_code != 0:
 				sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
@@ -231,18 +278,20 @@ if __name__ == '__main__':
 	parser.add_argument('--verbose', '-v', default = False, action = 'store_true', help = 'Print executed commands (default: false)')
 	parser.add_argument('--step', '-s', type = str, action = 'append', default = [], help = 'Step to execute (default: build run analyze)')
 	parser.add_argument('--env', '-e', type = str, action = 'append', default = [], help = 'Environments to benchmark (default all)')
-	parser.add_argument('--d8', type = str, default = 'd8', help = 'Path to d8 (default: d8)')
+	parser.add_argument('--d8', type = str, default = 'd8', help = 'Path to V8 shell (default: d8)')
+	parser.add_argument('--node', type = str, default = 'node', help = 'Path to Node.js (default: node)')
+	parser.add_argument('--mozjs', type = str, default = 'js', help = 'Path to SpiderMonkey shell (default: js)')
 	parser.add_argument('benchmarks', metavar = '<benchmark>', type = str, default = ['box2d', 'coremark', 'lzma', 'sqlite', 'zlib'], nargs = '*', help = 'The name(s) of the benchmark(s) to run')
 	args = parser.parse_args()
 	if len(args.step) == 0:
 		args.step = ['build', 'run', 'analyze']
 	if len(args.env) == 0:
-		args.env = ['native', 'd8']
+		args.env = ['native', 'd8', 'node', 'mozjs']
 	if 'build' in args.step:
 		Benchmark.build_tools(args.env, args.verbose)
 	for name in args.benchmarks:
 		try:
-			benchmark = Benchmark(name, args.env, args.d8)
+			benchmark = Benchmark(name, args.env, args.d8, args.node, args.mozjs)
 			benchmark.set_verbose(args.verbose)
 			if 'build' in args.step:
 				benchmark.build()
