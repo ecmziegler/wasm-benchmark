@@ -9,6 +9,7 @@
 #include "stdio.h"
 #include "time.h"
 #include <stdint.h>
+#include <string.h>
 #include "wasm_perf.h"
 
 typedef unsigned int uint;
@@ -38,7 +39,7 @@ void init_decode_table() {
 
 #define next_char(x) char x = decode_table[(unsigned char)*str++]; if (x < 0) return 1;
 
-int decode(int size, const char* str, int* out_size, char** output) {
+[[gnu::noinline]] int decode(int size, const char* str, int* out_size, char** output) {
   *output = (char*) malloc( decode_size(size) );
   char *out = *output;
   while (size > 0 && (str[size - 1] == '\n' || str[size - 1] == '\r' || str[size - 1] == '=')) size--;
@@ -70,7 +71,7 @@ int decode(int size, const char* str, int* out_size, char** output) {
   return 0;
 }
 
-void encode(int size, const char* str, int* out_size, char** output) {
+[[gnu::noinline]] void encode(int size, const char* str, int* out_size, char** output) {
   *output = (char*) malloc( encode_size(size) );
   char *out = *output;
   const char* ends = str + (size - size % 3);
@@ -124,35 +125,43 @@ int main(int argc, char **argv) {
   for (int i = 0; i < STR_SIZE; i++) { str[i] = 'a'; }
   str[STR_SIZE] = '\0';
 
-  int s = 0;
-  clock_t t = clock();
-  wasm_perf_record_relative_progress("encode", 0);
-  for (int i = 0; i < TRIES; i++) { 
-    char *str2; 
-    int str2_size;
-    encode(STR_SIZE, str, &str2_size, &str2); 
-    s += str2_size;
-    free(str2); 
-    wasm_perf_record_relative_progress("encode", 1);
-  }
-  printf("encode: %d, %.2f\n", s, (float)(clock() - t)/CLOCKS_PER_SEC);
-
-  char *str2;
-  int str2_size;
-  encode(STR_SIZE, str, &str2_size, &str2);
-
-  s = 0;
-  t = clock();
-  for (int i = 0; i < TRIES; i++) {
-    char *str3;
-    int str3_size;
-    if (decode(str2_size, str2, &str3_size, &str3) != 0) {
-      printf("error when decoding");
+  int s;
+  clock_t t;
+  if (argc <= 2 || strncmp(argv[2], "encode", 7) == 0) {
+    s = 0;
+    t = clock();
+    wasm_perf_record_relative_progress("encode", 0);
+    for (int i = 0; i < TRIES; i++) { 
+      char *str2; 
+      int str2_size;
+      encode(STR_SIZE, str, &str2_size, &str2); 
+      s += str2_size;
+      free(str2); 
+      wasm_perf_record_relative_progress("encode", 1);
     }
-    s += str3_size;
-    free(str3);
+    printf("encode: %d, %.2f\n", s, (float)(clock() - t)/CLOCKS_PER_SEC);
   }
-  printf("decode: %d, %.2f\n", s, (float)(clock() - t)/CLOCKS_PER_SEC);
+
+  if (argc <= 2 || strncmp(argv[2], "decode", 7) == 0) {
+    char *str2;
+    int str2_size;
+    encode(STR_SIZE, str, &str2_size, &str2);
+
+    s = 0;
+    t = clock();
+    wasm_perf_record_relative_progress("decode", 0);
+    for (int i = 0; i < TRIES; i++) {
+      char *str3;
+      int str3_size;
+      if (decode(str2_size, str2, &str3_size, &str3) != 0) {
+        printf("error when decoding");
+      }
+      s += str3_size;
+      free(str3);
+      wasm_perf_record_relative_progress("decode", 1);
+    }
+    printf("decode: %d, %.2f\n", s, (float)(clock() - t)/CLOCKS_PER_SEC);
+  }
   return 0;
 }
 

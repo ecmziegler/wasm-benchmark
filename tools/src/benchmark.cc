@@ -58,7 +58,7 @@ ProgressRecorder::Analysis ProgressRecorder::analyze() const {
   if (data_.size() < 2) {
     throw std::domain_error("No data recorded");
   } else if (data_.size() < 4) {
-    return Analysis{data_[data_.size() - 2].time, 0, data_[data_.size() - 2].time, (data_.back().work - data_[data_.size() - 2].work) / (data_.back().time - data_[data_.size() - 2].time)};
+    return Analysis{data_[data_.size() - 2].time, 0, data_[data_.size() - 2].time, data_[data_.size() - 1].time, (data_.back().work - data_[data_.size() - 2].work) / (data_.back().time - data_[data_.size() - 2].time)};
   }
   
   // Determine start-up time.
@@ -67,24 +67,26 @@ ProgressRecorder::Analysis ProgressRecorder::analyze() const {
     if (start_up_iterator->work > 0.0)
       break;
   }
+  if (start_up_iterator != data_.begin())
+    --start_up_iterator;
 
-  Analysis analysis{start_up_iterator->time, 0, 0, 0.0, 0.0};
+  Analysis analysis{start_up_iterator->time, 0, 0, data_.back().time, 0.0, 0.0};
   
   // Fit peak performance and determine ramp-up time.
   const auto last_iterator = data_.end() - 1;
   const auto last_reliable_iterator = last_iterator - 1;  // Skip last value as it might contain additional clean-up time.
   double previous_error = std::numeric_limits<double>::max();
-  for (auto ramp_up_iterator = data_.begin(); ramp_up_iterator != last_reliable_iterator; ++ramp_up_iterator) {
-    const double performance = (last_reliable_iterator->work - ramp_up_iterator->work) / (last_reliable_iterator->time - ramp_up_iterator->time);
-    const double effective_start_up_time = ramp_up_iterator->time - ramp_up_iterator->work / performance;
+  for (auto warm_up_iterator = data_.begin(); warm_up_iterator != last_reliable_iterator; ++warm_up_iterator) {
+    const double performance = (last_reliable_iterator->work - warm_up_iterator->work) / (last_reliable_iterator->time - warm_up_iterator->time);
+    const double effective_start_up_time = warm_up_iterator->time - warm_up_iterator->work / performance;
     double error = 0.0;
-    for (auto iterator = ramp_up_iterator; iterator != last_iterator; ++iterator) {
+    for (auto iterator = warm_up_iterator; iterator != last_iterator; ++iterator) {
       const double delta = iterator->work - performance * (iterator->time - effective_start_up_time);
       error += delta * delta;
     }
-    error /= last_iterator - ramp_up_iterator;
+    error /= last_iterator - warm_up_iterator;
     if (error < previous_error) {
-      analysis.ramp_up_time = ramp_up_iterator->time;
+      analysis.warm_up_time = warm_up_iterator->time - start_up_iterator->time;
       analysis.effective_start_up_time = effective_start_up_time;
       analysis.peak_performance = performance;
       previous_error = error;
@@ -100,7 +102,7 @@ ProgressRecorder::Analysis ProgressRecorder::analyze() const {
 std::ostream& operator<<(std::ostream& os, const Benchmark& benchmark) {
   os << "[EVENTS]\n";
   for (const std::pair<size_t, std::string>& data_point : benchmark.event_recorder_.data_)
-    os << data_point.first << '\t' << data_point.first << '\n';
+    os << data_point.first << '\t' << data_point.second << '\n';
 
   os << "\n[INTERVALS]\n";
   for (const auto& interval_recorder : benchmark.interval_recorders_) {
@@ -117,8 +119,10 @@ std::ostream& operator<<(std::ostream& os, const Benchmark& benchmark) {
     ProgressRecorder::Analysis analysis = progress_recorder.second.analyze();
     os
       << "\n{\n\t\"start_up_time\": " << analysis.start_up_time << ",\n"
-      << "\t\"ramp_up_time\": " << analysis.ramp_up_time << ",\n"
+      << "\t\"warm_up_time\": " << analysis.warm_up_time << ",\n"
       << "\t\"effective_start_up_time\": " << analysis.effective_start_up_time << ",\n"
+      << "\t\"effective_start_up_time\": " << analysis.effective_start_up_time << ",\n"
+      << "\t\"duration\": " << analysis.duration << ",\n"
       << "\t\"initial_performance\": " << analysis.initial_performance << ",\n"
       << "\t\"peak_performance\": " << analysis.peak_performance << "\n}\n";
   }

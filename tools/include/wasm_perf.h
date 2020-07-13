@@ -12,12 +12,20 @@
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
-  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_mark_event(const char* event);
-  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_mark_start(const char* event, uint64_t reference);
-  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_mark_stop(const char* event, uint64_t reference);
-  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_record_progress(const char* work_item, float progress);
-  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_record_relative_progress(const char* work_item, float relative_progress);
+  // Optionally mark the begin of the benchmark.
+  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_ready();
+  // Optionally mark the end of the benchmark.
   extern void EMSCRIPTEN_KEEPALIVE wasm_perf_done();
+  // Record a point-in-time event for reference.
+  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_mark_event(const char* event);
+  // Mark the begin of an interval for reference.
+  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_mark_begin(const char* event, uint64_t reference);
+  // Mark the end of an interval for reference.
+  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_mark_end(const char* event, uint64_t reference);
+  // Record the absolute progress on a given work item. Different work items might interleave, but it may skew the result.
+  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_record_progress(const char* work_item, float progress);
+  // Record the progress since the last record on a given work item. Different work items might interleave, but it may skew the result.
+  extern void EMSCRIPTEN_KEEPALIVE wasm_perf_record_relative_progress(const char* work_item, float relative_progress);
 #ifdef __cplusplus
 }
 #endif // __cplusplus

@@ -1,12 +1,11 @@
 #include "benchmark.h"
 
-#include <stdio.h> 
+#include <cstdio> 
 #include <unistd.h> 
 #include <iostream>
 #include <fstream>
 #include <regex>
 #include <exception>
-#include <ext/stdio_filebuf.h>
 #include <sys/wait.h>
 
 
@@ -117,34 +116,51 @@ double parseTime(const char* time_string) {
 }
 
 
-void parseOutput(wasm::perf::Benchmark& benchmark, std::istream& input, const bool verbose) {
-  std::string line;
-  std::smatch match;
-  while (std::getline(input, line)) {
-    if (std::regex_match(line, match, regex)) {
-      const size_t time_in_us = std::stoull(match[2].str());
-      if (match[1].compare("EVENT") == 0) {
-        benchmark.getEventRecorder().submit(time_in_us, match[4].str());
-      } else if (match[1].compare("START") == 0) {
-        const uint64_t interval_id = std::stoull(match[3].str());
-        benchmark.getIntervalRecorder(match[4].str()).submitStart(time_in_us, interval_id);
-      } else if (match[1].compare("STOP") == 0) {
-        const uint64_t interval_id = std::stoull(match[3].str());
-        benchmark.getIntervalRecorder(match[4].str()).submitStop(time_in_us, interval_id);
-      } else if (match[1].compare("PROGRESS") == 0) {
-        const float progress = std::stof(match[3].str());
-        benchmark.getProgressRecorder(match[4].str()).submitAccumulatedWork(time_in_us, progress);
-      } else if (match[1].compare("REL_PROGRESS") == 0) {
-        const float rel_progress = std::stof(match[3].str());
-        benchmark.getProgressRecorder(match[4].str()).submitWorkPackage(time_in_us, rel_progress);
-      } else if (match[1].compare("DONE") == 0) {
-        benchmark.submitDone();
-      } else {
-        std::cerr << "Unknown perf record " << match[1] << std::endl;
+ssize_t parseOutput(wasm::perf::Benchmark& benchmark, std::FILE* const input, ssize_t time_shift_in_us, const bool verbose) {
+  char* line = nullptr;
+  size_t max_line_length = 0;
+  ssize_t line_length = -1;
+  std::cmatch match;
+  size_t time_in_us;
+  try {
+    while ((line_length = getline(&line, &max_line_length, input)) >= 0) {
+      line[line_length - 1] = '\0';  // Remove newline at end.
+      if (std::regex_match(line, match, regex) && !benchmark.done()) {
+        time_in_us = std::stoull(match[2].str());
+        if (match[1].compare("READY") == 0) {
+          time_shift_in_us -= time_in_us;
+        } else {
+          time_in_us += time_shift_in_us;
+          if (match[1].compare("DONE") == 0) {
+            benchmark.submitDone();
+          } else if (match[1].compare("EVENT") == 0) {
+            benchmark.getEventRecorder().submit(time_in_us, match[4].str());
+          } else if (match[1].compare("BEGIN") == 0) {
+            const uint64_t interval_id = std::stoull(match[3].str());
+            benchmark.getIntervalRecorder(match[4].str()).submitBegin(time_in_us, interval_id);
+          } else if (match[1].compare("END") == 0) {
+            const uint64_t interval_id = std::stoull(match[3].str());
+            benchmark.getIntervalRecorder(match[4].str()).submitEnd(time_in_us, interval_id);
+          } else if (match[1].compare("PROGRESS") == 0) {
+            const float progress = std::stof(match[3].str());
+            benchmark.getProgressRecorder(match[4].str()).submitAccumulatedWork(time_in_us, progress);
+          } else if (match[1].compare("REL_PROGRESS") == 0) {
+            const float rel_progress = std::stof(match[3].str());
+            benchmark.getProgressRecorder(match[4].str()).submitWorkPackage(time_in_us, rel_progress);
+          } else {
+            std::cerr << "Unknown perf record " << match[1] << std::endl;
+          }
+        }
+      } else if (verbose) {
+        std::cout << line << std::endl;
       }
-    } else if (verbose)
-      std::cout << line << std::endl;
+    }
+    std::free(line);
+  } catch (...) {
+    std::free(line);
+    throw;
   }
+  return time_in_us;
 }
 
 
@@ -166,7 +182,7 @@ int main(const int argc, char* const argv[]) {
       wasm::perf::Benchmark benchmark;
       if (args.getRecordRuns())
         benchmark.getProgressRecorder("runs").submitAccumulatedWork(benchmark.getTimeStamp(), 0);
-      parseOutput(benchmark, std::cin, args.getVerbose());
+      parseOutput(benchmark, stdin, 0, args.getVerbose());
       if (args.getRecordRuns())
         benchmark.getProgressRecorder("runs").submitAccumulatedWork(benchmark.getTimeStamp(), 1);
       args.getOutput() << benchmark;
@@ -174,6 +190,7 @@ int main(const int argc, char* const argv[]) {
       wasm::perf::Benchmark benchmark;
       if (args.getRecordRuns())
         benchmark.getProgressRecorder("runs").submitAccumulatedWork(benchmark.getTimeStamp(), 0);
+      ssize_t time_shift_in_us = 0;
       for (size_t run_index = 0; run_index < args.getRuns(); ++run_index) {
         // Create a new pipe.
         int fd[2];
@@ -193,16 +210,20 @@ int main(const int argc, char* const argv[]) {
         } else {
           // This is the parent process. Read from pipe, close unnecessary file descriptors and then keep parsing the output.
           close(fd[1]);
-          __gnu_cxx::stdio_filebuf<char> input_buf(fd[0], std::ios::in);
-          std::istream input(&input_buf);
-          parseOutput(benchmark, input, args.getVerbose());
-          int status = -1;
-          waitpid(pid, &status, 0);
-          if (args.getRecordRuns())
-            benchmark.getProgressRecorder("runs").submitAccumulatedWork(benchmark.getTimeStamp(), run_index + 1);
-          status = WEXITSTATUS(status);
-          if (status != 0) {
-            std::cerr << "Program exited with status " << status << std::endl;
+          std::FILE* input = fdopen(fd[0], "r");
+          try {
+            time_shift_in_us = parseOutput(benchmark, input, time_shift_in_us, args.getVerbose());
+            int status = -1;
+            waitpid(pid, &status, 0);
+            if (args.getRecordRuns())
+              benchmark.getProgressRecorder("runs").submitAccumulatedWork(benchmark.getTimeStamp(), run_index + 1);
+            status = WEXITSTATUS(status);
+            if (status != 0)
+              std::cerr << "Program exited with status " << status << std::endl;
+            std::fclose(input);
+          } catch (...) {
+            std::fclose(input);
+            throw;
           }
         }
       }

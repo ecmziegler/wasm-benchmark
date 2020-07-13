@@ -39,11 +39,11 @@ class IntervalRecorder {
   friend std::ostream& operator<<(std::ostream& os, const Benchmark& benchmark);
 
   public:
-    inline void submitStart(const size_t time_in_us, const uint64_t numeric_id) {
+    inline void submitBegin(const size_t time_in_us, const uint64_t numeric_id) {
       open_intervals_.emplace(numeric_id, time_in_us);
     }
 
-    inline void submitStop(const size_t time_in_us, const uint64_t numeric_id) {
+    inline void submitEnd(const size_t time_in_us, const uint64_t numeric_id) {
       const auto open_interval = open_intervals_.find(numeric_id);
       if (open_interval != open_intervals_.end()) {
         data_.emplace_back(open_interval->first, open_interval->second, time_in_us);
@@ -73,8 +73,9 @@ class ProgressRecorder {
   public:
     struct Analysis {
       size_t start_up_time;
-      size_t ramp_up_time;
+      size_t warm_up_time;
       size_t effective_start_up_time;
+      size_t duration;
       double initial_performance;
       double peak_performance;
     };
@@ -131,7 +132,15 @@ class Benchmark {
     inline size_t getTimeStamp() const {
       return time_keeper_.getTimeStamp();
     }
+    
+    inline bool done() const {
+      return done_;
+    }
 
+    inline void submitDone() {
+      done_ = true;
+    }
+  
     inline EventRecorder& getEventRecorder() {
       return event_recorder_;
     }
@@ -144,9 +153,6 @@ class Benchmark {
       return progress_recorders_[id];
     }
 
-    inline void submitDone() {
-    }
-  
   private:
     TimeKeeper time_keeper_;
     EventRecorder event_recorder_;

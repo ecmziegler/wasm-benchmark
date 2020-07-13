@@ -17,12 +17,13 @@ function generate_glue_code(function_name) {
   }
 }
 
+var _wasm_perf_ready;
+var _wasm_perf_done;
 var _wasm_perf_mark_event;
-var _wasm_perf_mark_start;
-var _wasm_perf_mark_stop;
+var _wasm_perf_mark_begin;
+var _wasm_perf_mark_end;
 var _wasm_perf_record_progress;
 var _wasm_perf_record_relative_progress;
-var _wasm_perf_done;
 
 
 Promise.all([
@@ -36,12 +37,13 @@ Promise.all([
     })
   ).then(recorder => {
     global_recorder = recorder;
+    _wasm_perf_ready = global_recorder.__wasm_perf_ready;
+    _wasm_perf_done = global_recorder.__wasm_perf_done;
     _wasm_perf_mark_event = generate_glue_code('mark_event');
-    _wasm_perf_mark_start = generate_glue_code('mark_start');
-    _wasm_perf_mark_stop = generate_glue_code('mark_stop');
+    _wasm_perf_mark_begin = generate_glue_code('mark_begin');
+    _wasm_perf_mark_end = generate_glue_code('mark_end');
     _wasm_perf_record_progress = generate_glue_code('record_progress');
     _wasm_perf_record_relative_progress = generate_glue_code('record_relative_progress');
-    _wasm_perf_done = global_recorder.__wasm_perf_done;
 
     // Install monkey patched WebAssembly methods with markers.
     let wasm_compile_count = 0;
@@ -49,19 +51,20 @@ Promise.all([
     const wasm_compile = WebAssembly.compile;
     const wasm_instantiate = WebAssembly.instantiate;
     WebAssembly.compile = function (...args) {
-      recorder.ccall('wasm_perf_mark_start', 'void', ['string', 'int'], ['WebAssembly.compile', wasm_compile_count]);
+      recorder.ccall('wasm_perf_mark_begin', 'void', ['string', 'int'], ['WebAssembly.compile', wasm_compile_count]);
       const result = wasm_compile.apply(this, args);
-      recorder.ccall('wasm_perf_mark_stop', 'void', ['string', 'int'], ['WebAssembly.compile', wasm_compile_count]);
+      recorder.ccall('wasm_perf_mark_end', 'void', ['string', 'int'], ['WebAssembly.compile', wasm_compile_count]);
       ++wasm_compile_count;
       return result;
     };
     WebAssembly.instantiate = function (...args) {
-      recorder.ccall('wasm_perf_mark_start', 'void', ['string', 'int'], ['WebAssembly.instantiate', wasm_instantiate_count]);
+      recorder.ccall('wasm_perf_mark_begin', 'void', ['string', 'int'], ['WebAssembly.instantiate', wasm_instantiate_count]);
       const result = wasm_instantiate.apply(this, args);
-      recorder.ccall('wasm_perf_mark_stop', 'void', ['string', 'int'], ['WebAssembly.instantiate', wasm_instantiate_count]);
+      recorder.ccall('wasm_perf_mark_end', 'void', ['string', 'int'], ['WebAssembly.instantiate', wasm_instantiate_count]);
       ++wasm_instantiate_count;
       return result;
     }
+    recorder._wasm_perf_ready();
     return recorder;
   }), import(wasm_js).then(({default: module}) =>
     module
@@ -78,8 +81,11 @@ Promise.all([
   }).then(instance => [recorder, instance]);
 }).then(([recorder, instance]) => {
   global_instance = instance;
+  recorder.ccall('wasm_perf_mark_event', 'void', ['string'], ['instantiated']);
+  recorder.ccall('wasm_perf_record_progress', 'void', ['string', 'float'], ['runs', 0]);
   for (let run = 0; run < runs; ++run) {
-    instance._main(0, 0);
+    instance.callMain(argv);
+    recorder.ccall('wasm_perf_record_progress', 'void', ['string', 'float'], ['runs', run + 1]);
   }
   recorder._wasm_perf_done();
   quit(0);
