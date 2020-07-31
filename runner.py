@@ -259,22 +259,14 @@ class Benchmark:
 				with open(os.path.join(base_dir, 'out', self.name, '{}_node.txt'.format(profile.name)), 'w') as output_file:
 					return_code = self.call([
 						self.node,
-						'-e', '''const recorder_js = "{recorder}.mjs";
-							const wasm_js = "{module}.mjs";
-							 const argv = {arguments};
-							const runs = {runs};
-							const verbose = {verbose};
-							var print = console.log;
-							var printErr = console.error;
-							var quit = process.exit;
-							eval(fs.readFileSync("{script}")+"");'''.format(
-								recorder = os.path.join(base_dir, 'out', 'tools', 'wasm', 'recorder'),
-								module = profile.wasm_binary,
-								arguments = json.dumps(profile.arguments),
-								runs = profile.runs,
-								verbose = 'true' if self.verbose else 'false',
-								script = os.path.join(base_dir, 'wrapper.js')),
-					], cwd = os.path.dirname(profile.wasm_binary), stdout = output_file)
+						'--experimental-modules',
+						'--experimental-wasm-modules',
+						os.path.join(base_dir, 'wrapper.js'),
+						os.path.join(base_dir, 'out', 'tools', 'wasm', 'recorder'),
+						profile.wasm_binary,
+						str(profile.runs),
+						'true' if self.verbose else 'false',
+					] + profile.arguments, cwd = os.path.dirname(profile.wasm_binary), stdout = output_file)
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
@@ -442,7 +434,7 @@ if __name__ == '__main__':
 	if 'build' in args.step:
 		Benchmark.build_tools(args.env, args.verbose)
 	for name in args.benchmarks:
-		try:
+		#try:
 			benchmark = Benchmark(name, args.env, args.d8, args.node, args.mozjs)
 			benchmark.set_verbose(args.verbose)
 			if 'build' in args.step:
@@ -451,6 +443,6 @@ if __name__ == '__main__':
 				benchmark.run()
 			if 'analyze' in args.step:
 				benchmark.analyze(args.format)
-		except FileNotFoundError:
-			sys.stderr.write('Skipping {benchmark}, config file not found or erroneous.\n'.format(benchmark = name))
-			sys.stderr.flush()
+		#except FileNotFoundError:
+		#	sys.stderr.write('Skipping {benchmark}, config file not found or erroneous.\n'.format(benchmark = name))
+		#	sys.stderr.flush()

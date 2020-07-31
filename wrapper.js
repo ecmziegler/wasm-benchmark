@@ -1,5 +1,36 @@
 "use strict";
 
+
+// Special handling in Node.js because we cannot execute JS before script
+if ((typeof process !== 'undefined') && (process.release.name === 'node')) {
+  global.recorder_js = `${process.argv[2]}.mjs`;
+  global.wasm_js = `${process.argv[3]}.mjs`;
+  global.argv = `${process.argv.slice(6)}`;
+  global.runs = parseInt(process.argv[4], 10);
+  global.verbose = (process.argv[5] == 'true');
+  global.print = console.log;
+  global.printErr = console.error;
+  global.quit = process.exit;
+  global.__dirname = __dirname;
+  global.require = require;
+  global._wasm_perf_ready = null;
+  global._wasm_perf_done = null;
+  global._wasm_perf_mark_event = null;
+  global._wasm_perf_mark_begin = null;
+  global._wasm_perf_mark_end = null;
+  global._wasm_perf_record_progress = null;
+  global._wasm_perf_record_relative_progress = null;
+} else {
+  var _wasm_perf_ready;
+  var _wasm_perf_done;
+  var _wasm_perf_mark_event;
+  var _wasm_perf_mark_begin;
+  var _wasm_perf_mark_end;
+  var _wasm_perf_record_progress;
+  var _wasm_perf_record_relative_progress;
+}
+
+
 var global_recorder;
 var global_instance;
 
@@ -17,14 +48,6 @@ function generate_glue_code(function_name) {
   }
 }
 
-var _wasm_perf_ready;
-var _wasm_perf_done;
-var _wasm_perf_mark_event;
-var _wasm_perf_mark_begin;
-var _wasm_perf_mark_end;
-var _wasm_perf_record_progress;
-var _wasm_perf_record_relative_progress;
-
 
 Promise.all([
   import(recorder_js).then(({default: recorder}) =>
@@ -37,8 +60,8 @@ Promise.all([
     })
   ).then(recorder => {
     global_recorder = recorder;
-    _wasm_perf_ready = global_recorder.__wasm_perf_ready;
-    _wasm_perf_done = global_recorder.__wasm_perf_done;
+    _wasm_perf_ready = global_recorder._wasm_perf_ready;
+    _wasm_perf_done = global_recorder._wasm_perf_done;
     _wasm_perf_mark_event = generate_glue_code('mark_event');
     _wasm_perf_mark_begin = generate_glue_code('mark_begin');
     _wasm_perf_mark_end = generate_glue_code('mark_end');
