@@ -149,10 +149,14 @@ class Benchmark:
 		else:
 			self.profiles = [Benchmark.ExecutionProfile(self.name, 'runs', {})]
 		self.verbose = False
+		self.run_profiler = True
 		self.envs = envs
 
 	def set_verbose (self, enabled):
 		self.verbose = enabled
+
+	def set_run_profiler (self, enabled):
+		self.run_profiler = enabled
 
 	def call (self, arguments, cwd = None, stdout = None, stderr = None):
 		if self.verbose:
@@ -222,6 +226,17 @@ class Benchmark:
 					'-R',
 					'-o', os.path.join(base_dir, 'out', self.name, '{}_native.txt'.format(profile.name)),
 					'--', profile.native_binary] + profile.arguments;
+				if self.run_profiler:
+					perf_output = os.path.join(base_dir, 'out', self.name, '{}_native.perf'.format(profile.name))
+					if os.path.exists(perf_output):
+						os.remove(perf_output)
+					args[7:7] = [
+						'perf',
+						'record',
+#						'-A',
+						'-o', perf_output,
+						'--'
+					]
 				if self.verbose:
 					args.insert(1, '-v')
 				return_code = self.call(args)
@@ -234,7 +249,7 @@ class Benchmark:
 			for profile in self.profiles:
 				print('Benchmarking {benchmark} {profile} in d8'.format(benchmark = self.name, profile = profile.name))
 				with open(os.path.join(base_dir, 'out', self.name, '{}_d8.txt'.format(profile.name)), 'w') as output_file:
-					return_code = self.call([
+					cmd = [
 						self.d8,
 						'-e', '''const recorder_js = "{recorder}.mjs";
 							 const wasm_js = "{module}.mjs";
@@ -247,10 +262,32 @@ class Benchmark:
 								runs = profile.runs,
 								verbose = 'true' if self.verbose else 'false'),
 						os.path.join(base_dir, 'wrapper.js')
-					], cwd = os.path.dirname(profile.wasm_binary), stdout = output_file)
+					]
+					if self.run_profiler:
+						cmd[0:0] = [
+							'perf',
+							'record',
+							'-k', 'mono',
+							'-o', os.path.join(base_dir, 'out', self.name, '{}_d8.raw.perf'.format(profile.name)),
+							'--'
+						]
+						cmd[8:8] = [
+							'--perf-prof',
+#							'--perf-prof-annotate-wasm',
+#							'--nowrite-protect-code-memory'
+						]
+					return_code = self.call(cmd, cwd = os.path.dirname(profile.wasm_binary), stdout = output_file)
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
+				if self.run_profiler:
+					self.call([
+						'perf',
+						'inject',
+						'-j',
+						'-i', os.path.join(base_dir, 'out', self.name, '{}_d8.raw.perf'.format(profile.name)),
+						'-o', os.path.join(base_dir, 'out', self.name, '{}_d8.perf'.format(profile.name))
+					], cwd = os.path.dirname(profile.wasm_binary))
 
 		# Node execution
 		if 'node' in self.envs:
@@ -418,6 +455,7 @@ class Benchmark:
 if __name__ == '__main__':
 	parser = ArgumentParser()
 	parser.add_argument('--verbose', '-v', default = False, action = 'store_true', help = 'Print executed commands (default: false)')
+	parser.add_argument('--perf', '-p', default = False, action = 'store_true', help = 'Run perforkance profiler during native and d8 benchmark execution (default: false)')
 	parser.add_argument('--step', '-s', type = str, action = 'append', default = [], help = 'Step to execute (default: build run analyze)')
 	parser.add_argument('--env', '-e', type = str, action = 'append', default = [], help = 'Environments to benchmark (default all)')
 	parser.add_argument('--format','-f', type = str, default = 'svg', choices = ['svg'], help = 'Output format for analysis (default: svg)')
@@ -439,6 +477,7 @@ if __name__ == '__main__':
 		#try:
 			benchmark = Benchmark(name, args.env, args.d8, args.node, args.mozjs)
 			benchmark.set_verbose(args.verbose)
+			benchmark.set_run_profiler(args.perf)
 			if 'build' in args.step:
 				benchmark.build()
 			if 'run' in args.step:
