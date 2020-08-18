@@ -49,7 +49,7 @@ function generate_glue_code(function_name) {
 }
 
 
-Promise.all([
+const benchmark = Promise.all([
   import(recorder_js).then(({default: recorder}) =>
     recorder({
       print: print,

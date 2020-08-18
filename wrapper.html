@@ -1,0 +1,29 @@
+<html>
+
+<head>
+    <title>WebAssembly benchmark</title>
+</head>
+
+<body>
+    <script type="text/javascript">
+    //<![CDATA[
+    const params = new URLSearchParams(window.location.search);
+    const recorder_js = params.get('recorder');
+    const wasm_js = params.get('wasm');
+    const argv = params.getAll('arg');
+    const runs = parseInt(params.get('runs'), 10);
+    const verbose = JSON.parse(params.get('verbose'));
+
+    const output_buffer = [];
+    const print = (text) => output_buffer.push(text);
+    const printErr = console.error;
+    const quit = (status) => {
+        const pre = document.createElement('pre');
+        pre.innerText = output_buffer.join('\n');
+        pre.setAttribute("id", "output");
+        document.body.appendChild(pre);
+    };
+    //]]>
+    </script>
+    <script src="wrapper.js"></script>
+</body>

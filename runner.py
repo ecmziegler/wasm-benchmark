@@ -12,6 +12,7 @@ try:
     from yaml import CLoader as YamlLoader
 except ImportError:
     from yaml import Loader as YamlLoader
+from urllib.parse import quote as urlquote
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -174,10 +175,10 @@ class Benchmark:
 					out, err = proc.communicate()
 					sys.stderr.write('Timeout\n')
 				if out is not None:
-					sys.stdout.write(out)
+					sys.stdout.write(out.decode("utf-8"))
 					sys.stdout.flush()
 				if err is not None:
-					sys.stderr.write(out)
+					sys.stderr.write(err.decode("utf-8"))
 					sys.stderr.flush()
 				return proc.returncode
 
@@ -192,12 +193,18 @@ class Benchmark:
 			subprocess.call(['make'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in envs or 'node' in envs or 'mozjs' in envs:
+		if 'd8' in envs or 'chrome' in envs or 'node' in envs or 'mozjs' in envs:
 			build_dir = os.path.join(base_dir, 'out', 'tools', 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building helper tools with Emscripten')
 			subprocess.call(['emcmake', 'cmake', os.path.join(base_dir, 'tools')], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 			subprocess.call(['emmake', 'make'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
+
+		# Chrome dependencies
+		if 'chrome' in envs:
+			build_dir = os.path.join(base_dir, 'puppeteer')
+			print('Installing dependencies for Chrome')
+			subprocess.call(['npm', 'install'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
 	def build (self):
 		# Native build
@@ -209,7 +216,7 @@ class Benchmark:
 			self.call(self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in self.envs or 'node' in self.envs or 'mozjs' in self.envs:
+		if 'd8' in self.envs or 'chrome' in self.envs or 'node' in self.envs or 'mozjs' in self.envs:
 			build_dir = os.path.join(base_dir, 'out', self.name, 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building {benchmark} with Emscripten'.format(benchmark = self.name))
@@ -289,6 +296,26 @@ class Benchmark:
 						'-o', os.path.join(base_dir, 'out', self.name, '{}_d8.perf'.format(profile.name))
 					], cwd = os.path.dirname(profile.wasm_binary))
 
+		# Chrome execution
+		if 'chrome' in self.envs:
+			for profile in self.profiles:
+				print('Benchmarking {benchmark} {profile} in chrome'.format(benchmark = self.name, profile = profile.name))
+				return_code = self.call([
+					'node',
+					'puppeteer/run.js',
+					'http://localhost:{port}/wrapper.html?recorder=/{recorder}.mjs&wasm=/{module}.mjs&{arguments}&runs={runs}&verbose={verbose}'.format(
+						port = 8080,
+						recorder = urlquote(os.path.join('out', 'tools', 'wasm', 'recorder')),
+						module = urlquote(os.path.relpath(profile.wasm_binary, base_dir)),
+						arguments = '&'.join(['arg=' + urlquote(arg) for arg in profile.arguments]),
+						runs = profile.runs,
+						verbose = 'true' if self.verbose else 'false'),
+					os.path.join(base_dir, 'out', self.name, '{}_chrome.txt'.format(profile.name))
+				])
+				if return_code != 0:
+					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
+					sys.stderr.flush()
+
 		# Node execution
 		if 'node' in self.envs:
 			for profile in self.profiles:
@@ -352,6 +379,7 @@ class Benchmark:
 		summary_legend_labels = {env: color for env, color in {
 				'native': 'gray',
 				'd8': 'cornflowerblue',
+				'chrome': 'lightsteelblue',
 				'node': 'darkorange',
 				'mozjs': 'coral'
 			}.items() if env in self.envs}
@@ -470,7 +498,7 @@ if __name__ == '__main__':
 	if len(args.step) == 0:
 		args.step = ['build', 'run', 'analyze']
 	if len(args.env) == 0:
-		args.env = ['native', 'd8', 'node', 'mozjs']
+		args.env = ['native', 'd8', 'chrome', 'node', 'mozjs']
 	if 'build' in args.step:
 		Benchmark.build_tools(args.env, args.verbose)
 	for name in args.benchmarks:
