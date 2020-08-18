@@ -280,8 +280,7 @@ class Benchmark:
 						]
 						cmd[8:8] = [
 							'--perf-prof',
-#							'--perf-prof-annotate-wasm',
-#							'--nowrite-protect-code-memory'
+							'--no-wasm-async-compilation'
 						]
 					return_code = self.call(cmd, cwd = os.path.dirname(profile.wasm_binary), stdout = output_file)
 				if return_code != 0:
