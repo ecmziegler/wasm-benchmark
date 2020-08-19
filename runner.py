@@ -302,7 +302,7 @@ class Benchmark:
 				return_code = self.call([
 					'node',
 					'puppeteer/run.js',
-					'http://localhost:{port}/wrapper.html?recorder=/{recorder}.mjs&wasm=/{module}.mjs&{arguments}&runs={runs}&verbose={verbose}'.format(
+					'wrapper.html?recorder=/{recorder}.mjs&wasm=/{module}.mjs&{arguments}&runs={runs}&verbose={verbose}'.format(
 						port = 8080,
 						recorder = urlquote(os.path.join('out', 'tools', 'wasm', 'recorder')),
 						module = urlquote(os.path.relpath(profile.wasm_binary, base_dir)),

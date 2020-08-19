@@ -2,16 +2,16 @@ const express = require('express');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 
-const url = process.argv[2];
+const url_path = process.argv[2];
 const output_file = process.argv[3];
 
 const server = new express();
 server.use(express.static('.'));
 
-async function benchmark(url, output_file) {
+async function benchmark(port, url_path, output_file) {
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
-  const status = await page.goto(url)
+  const status = await page.goto(`http://localhost:${port}/${url_path}`)
     .then(response => response.status());
   if (status !== 200) {
     browser.close();
@@ -25,10 +25,11 @@ async function benchmark(url, output_file) {
   ]);
 }
 
-server.listen(8080, benchmark(url, output_file)
-  .then(() => process.exit(0))
-  .catch(error => {
-    console.error(error);
-    process.exit(1);
-  })
-);
+const listener = server.listen(0, () => {
+  benchmark(listener.address().port, url_path, output_file)
+    .then(() => process.exit(0))
+    .catch(error => {
+      console.error(error);
+      process.exit(1);
+    });
+});
