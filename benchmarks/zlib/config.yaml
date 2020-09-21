@@ -1,4 +1,7 @@
 build:
     binary: zlib_bench
-execution:
-    runs: 5
+profiles:
+    compress-decompress:
+        binary: zlib_bench
+        runs: 1
+        arguments: []

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "wasm_perf.h"
 
 
 // don't inline, to be friendly to js engine osr
@@ -29,6 +30,7 @@ void __attribute__ ((noinline)) doit(unsigned char *buffer, int size, int i) {
   unsigned long decompressedSize = size;
   uncompress(buffer3, &decompressedSize, buffer2, (int)compressedSize);
   assert(decompressedSize == size);
+  wasm_perf_record_relative_progress("compress-decompress", size);
   if (i == 0) {
     if (strcmp((char*)buffer, (char*)buffer3) != 0) {
       puts("incorrect output!");
@@ -71,6 +73,7 @@ int main(int argc, char **argv) {
     i++;
   }
 
+  wasm_perf_record_relative_progress("compress-decompress", 0);
   for (i = 0; i < iters; i++) {
     doit(buffer, size, i);
   }
