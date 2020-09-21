@@ -150,7 +150,7 @@ class Benchmark:
 		else:
 			self.profiles = [Benchmark.ExecutionProfile(self.name, 'runs', {})]
 		self.verbose = False
-		self.run_profiler = True
+		self.run_profiler = False
 		self.envs = envs
 
 	def set_verbose (self, enabled):
