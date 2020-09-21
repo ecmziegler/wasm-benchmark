@@ -31,6 +31,8 @@ typedef struct {
 #include <emscripten.h>
 #endif
 
+#include "wasm_perf.h"
+
 #if NO_PRINTING
 #define printf(fmt, ...) (0)
 #endif
@@ -136,6 +138,7 @@ int main(int argc, char **argv) {
 		world->Step(1.0f/60.0f, 3, 3);
   }
 
+  wasm_perf_record_relative_progress("steps", 0);
   do {
     iter();
   } while (frameCounter <= FRAMES);
@@ -157,6 +160,8 @@ void iter() {
 	  printf("%f\n", (float32)(end - start) / CLOCKS_PER_SEC * 1000);
 #endif
     frameCounter++;
+    if ((frameCounter & 0xfu) == 0)
+      wasm_perf_record_relative_progress("steps", 0x10u);
     return;
   }
 
