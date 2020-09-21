@@ -429,12 +429,12 @@ class Benchmark:
 					position += 1
 					analysis.plot(progress_axes, profile.quantity, scale, env, color = summary_legend_labels[env])
 					
-					if len(analysis.events) > 0:
-						event_axis_shift -= 0.2;
-						events = progress_axes.secondary_xaxis(event_axis_shift)
-						events.set_xlabel('{} events'.format(env))
-						events.set_xticks([event.time/1000 for event in analysis.events])
-						events.set_xticklabels([event.event_id for event in analysis.events])
+#					if len(analysis.events) > 0:
+#						event_axis_shift -= 0.2;
+#						events = progress_axes.secondary_xaxis(event_axis_shift)
+#						events.set_xlabel('{} events'.format(env))
+#						events.set_xticks([event.time/1000 for event in analysis.events])
+#						events.set_xticklabels([event.event_id for event in analysis.events])
 					
 #					if len(analysis.intervals) > 0:
 #						for interval in analysis.intervals:
