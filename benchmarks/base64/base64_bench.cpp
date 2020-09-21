@@ -39,7 +39,7 @@ void init_decode_table() {
 
 #define next_char(x) char x = decode_table[(unsigned char)*str++]; if (x < 0) return 1;
 
-[[gnu::noinline]] int decode(int size, const char* str, int* out_size, char** output) {
+int __attribute__ ((noinline)) decode(int size, const char* str, int* out_size, char** output) {
   *output = (char*) malloc( decode_size(size) );
   char *out = *output;
   while (size > 0 && (str[size - 1] == '\n' || str[size - 1] == '\r' || str[size - 1] == '=')) size--;
@@ -71,7 +71,7 @@ void init_decode_table() {
   return 0;
 }
 
-[[gnu::noinline]] void encode(int size, const char* str, int* out_size, char** output) {
+void __attribute__ ((noinline)) encode(int size, const char* str, int* out_size, char** output) {
   *output = (char*) malloc( encode_size(size) );
   char *out = *output;
   const char* ends = str + (size - size % 3);
