@@ -1,11 +1,7 @@
-build:
-    binary: base64_bench
 profiles:
     encode:
         binary: base64_bench
-        runs: 1
         arguments: ['5', 'encode']
     decode:
         binary: base64_bench
-        runs: 1
         arguments: ['5', 'decode']

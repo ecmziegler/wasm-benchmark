@@ -1,5 +1,3 @@
-build:
-    binary: box2d_bench
 profiles:
-  steps:
-    runs: 1
+    steps:
+        binary: box2d_bench

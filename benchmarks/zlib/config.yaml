@@ -1,7 +1,3 @@
-build:
-    binary: zlib_bench
 profiles:
     compress-decompress:
         binary: zlib_bench
-        runs: 1
-        arguments: []
