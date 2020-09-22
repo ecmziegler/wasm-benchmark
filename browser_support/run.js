@@ -1,5 +1,4 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
 const webdriver = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
 const firefox = require('selenium-webdriver/firefox');
@@ -14,24 +13,7 @@ process.env['PATH'] = `browser_support/node_modules/chromedriver/bin:browser_sup
 const server = new express();
 server.use(express.static('.'));
 
-async function puppeteer_benchmark(port, url_path, output_file) {
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-  const status = await page.goto(`http://localhost:${port}/${url_path}`)
-    .then(response => response.status());
-  if (status !== 200) {
-    browser.close();
-    throw `Error ${status} while loading page ${url}`;
-  }
-  const output = await page.waitForSelector('#output')
-    .then(element => page.evaluate(element => element.innerText, element));
-  await Promise.all([
-    fs.promises.writeFile(output_file, output),
-    browser.close()
-  ]);
-}
-
-async function selenium_benchmark(port, url_path, output_file) {
+async function benchmark(port, url_path, output_file) {
   const driver = await new webdriver.Builder()
     .forBrowser(browser_name)
     .setChromeOptions(new chrome.Options().addArguments('--headless'))
@@ -52,7 +34,6 @@ async function selenium_benchmark(port, url_path, output_file) {
 }
 
 const listener = server.listen(0, () => {
-  const benchmark = (browser_name == 'chrome' ? puppeteer_benchmark : selenium_benchmark);
   benchmark(listener.address().port, url_path, output_file)
     .then(() => process.exit(0))
     .catch(error => {
