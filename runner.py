@@ -16,10 +16,15 @@ from urllib.parse import quote as urlquote
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
+allowed_steps = ['build', 'run', 'analyze']
+allowed_envs = ['native', 'd8', 'chrome', 'mozjs', 'firefox']
+allowed_benchmarks = ['base64', 'zlib', 'box2d']
+whitespace = re.compile('\s')
+
 class Analysis:
 	class Event:
 		def __init__ (self, line):
-			fields = line.split('\t')
+			fields = re.split(whitespace, line, 2)
 			self.time = int(fields[0])
 			self.event_id = fields[1]
 
@@ -27,7 +32,7 @@ class Analysis:
 
 	class Interval:
 		def __init__ (self, line):
-			fields = line.split('\t')
+			fields = re.split(whitespace, line, 4)
 			self.begin_time = int(fields[0])
 			self.end_time = int(fields[1])
 			self.interval_id = fields[2]
@@ -37,7 +42,7 @@ class Analysis:
 
 	class Progress:
 		def __init__ (self, line):
-			fields = line.split('\t')
+			fields = re.split(whitespace, line, 2)
 			self.time = int(fields[0])
 			self.work = float(fields[1])
 			self.performance = None
@@ -193,17 +198,17 @@ class Benchmark:
 			subprocess.call(['make'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in envs or 'chrome' in envs or 'node' in envs or 'mozjs' in envs:
+		if 'd8' in envs or 'chrome' in envs or 'firefox' in envs or 'node' in envs or 'mozjs' in envs:
 			build_dir = os.path.join(base_dir, 'out', 'tools', 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building helper tools with Emscripten')
 			subprocess.call(['emcmake', 'cmake', os.path.join(base_dir, 'tools')], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 			subprocess.call(['emmake', 'make'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
-		# Chrome dependencies
-		if 'chrome' in envs:
-			build_dir = os.path.join(base_dir, 'puppeteer')
-			print('Installing dependencies for Chrome')
+		# Chrome & Firefox dependencies
+		if 'chrome' in envs or 'firefox' in envs:
+			build_dir = os.path.join(base_dir, 'browser_support')
+			print('Installing dependencies for Chrome/Firefox')
 			subprocess.call(['npm', 'install'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
 	def build (self):
@@ -216,7 +221,7 @@ class Benchmark:
 			self.call(self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in self.envs or 'chrome' in self.envs or 'node' in self.envs or 'mozjs' in self.envs:
+		if 'd8' in self.envs or 'chrome' in self.envs or 'firefox' in self.envs or 'node' in self.envs or 'mozjs' in self.envs:
 			build_dir = os.path.join(base_dir, 'out', self.name, 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building {benchmark} with Emscripten'.format(benchmark = self.name))
@@ -295,25 +300,26 @@ class Benchmark:
 						'-o', os.path.join(base_dir, 'out', self.name, '{}_d8.perf'.format(profile.name))
 					], cwd = os.path.dirname(profile.wasm_binary))
 
-		# Chrome execution
-		if 'chrome' in self.envs:
-			for profile in self.profiles:
-				print('Benchmarking {benchmark} {profile} in chrome'.format(benchmark = self.name, profile = profile.name))
-				return_code = self.call([
-					'node',
-					'puppeteer/run.js',
-					'wrapper.html?recorder=/{recorder}.mjs&wasm=/{module}.mjs&{arguments}&runs={runs}&verbose={verbose}'.format(
-						port = 8080,
-						recorder = urlquote(os.path.join('out', 'tools', 'wasm', 'recorder')),
-						module = urlquote(os.path.relpath(profile.wasm_binary, base_dir)),
-						arguments = '&'.join(['arg=' + urlquote(arg) for arg in profile.arguments]),
-						runs = profile.runs,
-						verbose = 'true' if self.verbose else 'false'),
-					os.path.join(base_dir, 'out', self.name, '{}_chrome.txt'.format(profile.name))
-				])
-				if return_code != 0:
-					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
-					sys.stderr.flush()
+		# Chrome & Firefox execution
+		for browser in 'chrome', 'firefox':
+			if browser in self.envs:
+				for profile in self.profiles:
+					print('Benchmarking {benchmark} {profile} in {browser}'.format(benchmark = self.name, profile = profile.name, browser = browser.capitalize()))
+					return_code = self.call([
+						'node',
+						'browser_support/run.js',
+						browser,
+						'wrapper.html?recorder=/{recorder}.mjs&wasm=/{module}.mjs&{arguments}&runs={runs}&verbose={verbose}'.format(
+							recorder = urlquote(os.path.join('out', 'tools', 'wasm', 'recorder')),
+							module = urlquote(os.path.relpath(profile.wasm_binary, base_dir)),
+							arguments = '&'.join(['arg=' + urlquote(arg) for arg in profile.arguments]),
+							runs = profile.runs,
+							verbose = 'true' if self.verbose else 'false'),
+						os.path.join(base_dir, 'out', self.name, '{profile}_{browser}.txt'.format(profile = profile.name, browser = browser))
+					])
+					if return_code != 0:
+						sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
+						sys.stderr.flush()
 
 		# Node execution
 		if 'node' in self.envs:
@@ -380,7 +386,8 @@ class Benchmark:
 				'd8': 'cornflowerblue',
 				'chrome': 'lightsteelblue',
 				'node': 'darkorange',
-				'mozjs': 'coral'
+				'mozjs': 'coral',
+				'firefox': 'crimson'
 			}.items() if env in self.envs}
 		position = 0
 		with open(os.path.join(base_dir, 'out', self.name, 'overview.html'), 'w') as overview:
@@ -483,21 +490,21 @@ if __name__ == '__main__':
 	parser = ArgumentParser()
 	parser.add_argument('--verbose', '-v', default = False, action = 'store_true', help = 'Print executed commands (default: false)')
 	parser.add_argument('--perf', '-p', default = False, action = 'store_true', help = 'Run perforkance profiler during native and d8 benchmark execution (default: false)')
-	parser.add_argument('--step', '-s', type = str, action = 'append', default = [], help = 'Step to execute (default: build run analyze)')
-	parser.add_argument('--env', '-e', type = str, action = 'append', default = [], help = 'Environments to benchmark (default all)')
+	parser.add_argument('--step', '-s', type = str, action = 'append', choices = allowed_steps, default = [], help = 'Step to execute (default: build run analyze)')
+	parser.add_argument('--env', '-e', type = str, action = 'append', choices = allowed_envs, default = [], help = 'Environments to benchmark (default all)')
 	parser.add_argument('--format','-f', type = str, default = 'svg', choices = ['svg'], help = 'Output format for analysis (default: svg)')
 	parser.add_argument('--d8', type = str, default = 'd8', help = 'Path to V8 shell (default: d8)')
 	parser.add_argument('--node', type = str, default = 'node', help = 'Path to Node.js (default: node)')
 	parser.add_argument('--mozjs', type = str, default = 'js', help = 'Path to SpiderMonkey shell (default: js)')
-	parser.add_argument('benchmarks', metavar = '<benchmark>', type = str, default = ['box2d', 'coremark', 'lzma', 'sqlite', 'zlib'], nargs = '*', help = 'The name(s) of the benchmark(s) to run')
+	parser.add_argument('benchmarks', metavar = '<benchmark>', type = str, choices = allowed_benchmarks, default = allowed_benchmarks, nargs = '*', help = 'The name(s) of the benchmark(s) to run')
 	args = parser.parse_args()
 	import matplotlib
 	matplotlib.use(args.format)
 	import matplotlib.pyplot as plt
 	if len(args.step) == 0:
-		args.step = ['build', 'run', 'analyze']
+		args.step = allowed_steps
 	if len(args.env) == 0:
-		args.env = ['native', 'd8', 'chrome', 'node', 'mozjs']
+		args.env = allowed_envs
 	if 'build' in args.step:
 		Benchmark.build_tools(args.env, args.verbose)
 	for name in args.benchmarks:
