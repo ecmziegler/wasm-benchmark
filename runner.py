@@ -18,7 +18,7 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 allowed_steps = ['build', 'run', 'analyze']
 allowed_envs = ['native', 'd8', 'chrome', 'mozjs', 'firefox']
-allowed_benchmarks = ['base64', 'zlib', 'box2d']
+allowed_benchmarks = ['base64', 'zlib', 'box2d', 'lzma']
 whitespace = re.compile('\s')
 
 class Analysis:

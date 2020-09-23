@@ -17,6 +17,8 @@
 #include "LzmaDec.h"
 #include "LzmaEnc.h"
 
+#include "wasm_perf.h"
+
 static void *SzAlloc(void *p, size_t size) { p = p; return MyAlloc(size); }
 static void SzFree(void *p, void *address) { p = p; MyFree(address); }
 static ISzAlloc g_Alloc = { SzAlloc, SzFree };
@@ -116,8 +118,10 @@ int main(int argc, char **argv) {
     i++;
   }
 
+  wasm_perf_record_relative_progress("compress-decompress", 0);
   for (i = 0; i < iters; i++) {
     doit(buffer, size, i);
+    wasm_perf_record_relative_progress("compress-decompress", 1);
   }
 
   printf("ok.\n");

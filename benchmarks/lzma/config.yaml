@@ -1,4 +1,3 @@
-build:
-    binary: lzma_bench
-execution:
-    runs: 5
+profiles:
+    compress-decompress:
+        binary: lzma_bench
