@@ -1,12 +1,12 @@
 project(zlib_benchmark
   DESCRIPTION "zlib compression/decompression benchmark"
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 cmake_minimum_required(VERSION 3.16)
 
 include(../../CMakeLists.include)
 
-set_source_files_properties(zlib_bench.c PROPERTIES LANGUAGE CXX)
 add_executable(zlib_bench zlib_bench.c)
+set_target_properties(zlib_bench PROPERTIES LINKER_LANGUAGE CXX)
 
 add_subdirectory("${THIRD_PARTY_DIR}/zlib" zlib EXCLUDE_FROM_ALL)
 target_include_directories(zlib_bench PRIVATE "${THIRD_PARTY_DIR}/zlib" "${PROJECT_BINARY_DIR}/zlib")

@@ -1,12 +1,12 @@
 project(lzma_benchmark
   DESCRIPTION "lzma compression/decompression benchmark"
-  LANGUAGES CXX)
+  LANGUAGES C CXX)
 cmake_minimum_required(VERSION 3.16)
 
 include(../../CMakeLists.include)
 
-set_source_files_properties(lzma_bench.c PROPERTIES LANGUAGE CXX)
 add_executable(lzma_bench lzma_bench.c)
+set_target_properties(lzma_bench PROPERTIES LINKER_LANGUAGE CXX)
 
 add_custom_target(lzma
   COMMAND ${MAKE_COMMAND} WORKING_DIRECTORY "${THIRD_PARTY_DIR}/lzma")
