@@ -16,9 +16,11 @@ from urllib.parse import quote as urlquote
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
-allowed_steps = ['build', 'run', 'analyze']
-allowed_envs = ['native', 'd8', 'chrome', 'mozjs', 'firefox']
-allowed_benchmarks = ['base64', 'zlib', 'box2d', 'lzma']
+allowed_steps = {'build', 'run', 'analyze'}
+native_envs = {'native'}
+wasm_envs = {'d8', 'chrome', 'mozjs', 'firefox'}
+allowed_envs = native_envs | wasm_envs
+allowed_benchmarks = {'base64', 'zlib', 'box2d', 'lzma'}
 whitespace = re.compile('\s')
 
 class Analysis:
@@ -156,7 +158,7 @@ class Benchmark:
 			self.profiles = [Benchmark.ExecutionProfile(self.name, 'runs', {})]
 		self.verbose = False
 		self.run_profiler = False
-		self.envs = envs
+		self.envs = set(envs)
 
 	def set_verbose (self, enabled):
 		self.verbose = enabled
@@ -190,7 +192,7 @@ class Benchmark:
 	@staticmethod
 	def build_tools (envs, verbose = False):
 		# Native build
-		if 'native' in envs:
+		if not native_envs.isdisjoint(envs):
 			build_dir = os.path.join(base_dir, 'out', 'tools', 'native')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building helper tools with Clang')
@@ -198,7 +200,7 @@ class Benchmark:
 			subprocess.call(['make'], cwd = build_dir, stdout = None if verbose else subprocess.DEVNULL)
 
 		# Wasm build
-		if 'd8' in envs or 'chrome' in envs or 'firefox' in envs or 'node' in envs or 'mozjs' in envs:
+		if not wasm_envs.isdisjoint(envs):
 			build_dir = os.path.join(base_dir, 'out', 'tools', 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building helper tools with Emscripten')
@@ -213,20 +215,30 @@ class Benchmark:
 
 	def build (self):
 		# Native build
-		if 'native' in self.envs:
+		if not native_envs.isdisjoint(self.envs):
 			build_dir = os.path.join(base_dir, 'out', self.name, 'native')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building {benchmark} with Clang'.format(benchmark = self.name))
-			self.call(self.configure, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
-			self.call(self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
+			return_code = self.call(self.configure, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
+			if return_code != 0:
+				self.envs -= native_envs
+			else:
+				return_code = self.call(self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL)
+				if return_code != 0:
+					self.envs -= native_envs
 
 		# Wasm build
-		if 'd8' in self.envs or 'chrome' in self.envs or 'firefox' in self.envs or 'node' in self.envs or 'mozjs' in self.envs:
+		if not wasm_envs.isdisjoint(self.envs):
 			build_dir = os.path.join(base_dir, 'out', self.name, 'wasm')
 			os.makedirs(build_dir, exist_ok = True)
 			print('Building {benchmark} with Emscripten'.format(benchmark = self.name))
-			self.call(['emcmake' if self.configure[0] == 'cmake' else 'emconfigure'] + self.configure, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL, stderr = None if self.verbose else subprocess.DEVNULL)
-			self.call(['emmake'] + self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL, stderr = None if self.verbose else subprocess.DEVNULL)
+			return_code = self.call(['emcmake' if self.configure[0] == 'cmake' else 'emconfigure'] + self.configure, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL, stderr = None if self.verbose else subprocess.DEVNULL)
+			if return_code != 0:
+				self.envs -= wasm_envs
+			else:
+				return_code = self.call(['emmake'] + self.make, cwd = build_dir, stdout = None if self.verbose else subprocess.DEVNULL, stderr = None if self.verbose else subprocess.DEVNULL)
+				if return_code != 0:
+					self.envs -= wasm_envs
 	
 	def run (self):
 		# Native execution
@@ -255,6 +267,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
+					self.envs -= 'native'
 
 		# d8 execution
 		if 'd8' in self.envs:
@@ -291,6 +304,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
+					self.envs -= 'd8'
 				if self.run_profiler:
 					self.call([
 						'perf',
@@ -320,6 +334,7 @@ class Benchmark:
 					if return_code != 0:
 						sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 						sys.stderr.flush()
+						self.envs -= browser
 
 		# Node execution
 		if 'node' in self.envs:
@@ -339,6 +354,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
+					self.envs -= 'node'
 
 		# mozjs execution
 		if 'mozjs' in self.envs:
@@ -362,6 +378,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
+					self.envs -= 'mozjs'
 
 	def analyze (self, format):
 		performances_figure = plt.figure()
