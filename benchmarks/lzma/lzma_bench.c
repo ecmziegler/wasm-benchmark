@@ -23,7 +23,7 @@ static void *SzAlloc(void *p, size_t size) { p = p; return MyAlloc(size); }
 static void SzFree(void *p, void *address) { p = p; MyFree(address); }
 static ISzAlloc g_Alloc = { SzAlloc, SzFree };
 
-int64_t lzbench_lzma_compress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t level, size_t x, char* y)
+int64_t __attribute__ ((noinline)) lzbench_lzma_compress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t level, size_t x, char* y)
 {
 	CLzmaEncProps props;
 	int res;
@@ -48,7 +48,7 @@ int64_t lzbench_lzma_compress(char *inbuf, size_t insize, char *outbuf, size_t o
 	return LZMA_PROPS_SIZE + out_len;
 }
 
-int64_t lzbench_lzma_decompress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t x, size_t y, char* z)
+int64_t __attribute__ ((noinline)) lzbench_lzma_decompress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t x, size_t y, char* z)
 {
 	int res;
 	SizeT out_len = outsize;
@@ -65,45 +65,31 @@ int64_t lzbench_lzma_decompress(char *inbuf, size_t insize, char *outbuf, size_t
 
 // main part
 
-// don't inline, to be friendly to js engine osr
-void __attribute__ ((noinline)) doit(char *buffer, int size, int i) {
-  static char *buffer2 = NULL;
-  static char *buffer3 = NULL;
-
-  unsigned long maxCompressedSize = size * 2 + 10000; // whatever
-
-  if (!buffer2) buffer2 = (char*)malloc(maxCompressedSize);
-  if (!buffer3) buffer3 = (char*)malloc(size);
-
-  int64_t compressedSize = lzbench_lzma_compress(buffer, size, buffer2, maxCompressedSize, 4 /*level*/, 0, NULL);
-
-  if (i == 0) printf("sizes: %d,%d\n", size, (int32_t)compressedSize);
-
-  int64_t roundTrip = lzbench_lzma_decompress(buffer2, compressedSize, buffer3, size, 0, 0, NULL);
-
-  assert(roundTrip == size);
-  if (i == 0) assert(strcmp(buffer, buffer3) == 0);
-}
-
 int main(int argc, char **argv) {
-  int size, iters;
-  int arg = argc > 1 ? argv[1][0] - '0' : 3;
+  unsigned long uncompressed_size = 100000;
+  int iters;
+  int enable_compress = argc <= 1 || strncmp(argv[1], "compress", 9) == 0;
+  int enable_decompress = argc <= 1 || strncmp(argv[1], "decompress", 11) == 0;
+  int arg = argc > 2 ? argv[2][0] - '0' : 3;
   switch(arg) {
     case 0: return 0; break;
-    case 1: size = 100000; iters = 4*1; break;
-    case 2: size = 100000; iters = 4*10; break;
-    case 3: size = 100000; iters = 4*22; break;
-    case 4: size = 100000; iters = 4*125; break;
-    case 5: size = 100000; iters = 4*225; break;
+    case 1: iters = 4*1; break;
+    case 2: iters = 4*10; break;
+    case 3: iters = 4*22; break;
+    case 4: iters = 4*125; break;
+    case 5: iters = 4*225; break;
     default: printf("error: %d\\n", arg); return -1;
   }
 
-  char *buffer = (char*)malloc(size);
+  unsigned long maxCompressedSize = uncompressed_size * 2 + 10000; // whatever
+  unsigned long compressed_size = maxCompressedSize;
+  char* uncompressed_buffer = (char*)malloc(uncompressed_size);
+  char* compressed_buffer = (char*)malloc(maxCompressedSize);
 
   int i = 0;
   int run = 0;
   char runChar = 17;
-  while (i < size) {
+  while (i < uncompressed_size) {
     if (run > 0) {
       run--;
     } else {
@@ -114,18 +100,30 @@ int main(int argc, char **argv) {
         runChar = (i*i) % 6714;
       }
     }
-    buffer[i] = runChar;
+    uncompressed_buffer[i] = runChar;
     i++;
   }
 
-  wasm_perf_record_relative_progress("compress-decompress", 0);
-  for (i = 0; i < iters; i++) {
-    doit(buffer, size, i);
-    wasm_perf_record_relative_progress("compress-decompress", 1);
+  if (enable_compress) {
+    for (i = 0; i < iters; i++) {
+      wasm_perf_record_progress("compress", i);
+      compressed_size = lzbench_lzma_compress(uncompressed_buffer, uncompressed_size, compressed_buffer, maxCompressedSize, 4 /*level*/, 0, NULL);
+    }
+    wasm_perf_record_progress("compress", iters);
+  } else if (enable_decompress) {
+    compressed_size = lzbench_lzma_compress(uncompressed_buffer, uncompressed_size, compressed_buffer, maxCompressedSize, 4 /*level*/, 0, NULL);
+  }
+  printf("sizes: %d,%d\n", (int32_t)uncompressed_size, (int32_t)compressed_size);
+
+  if (enable_decompress) {
+    for (i = 0; i < iters; i++) {
+      wasm_perf_record_progress("decompress", i);
+      uncompressed_size = lzbench_lzma_decompress(compressed_buffer, compressed_size, uncompressed_buffer, uncompressed_size, 0, 0, NULL);
+    }
+    wasm_perf_record_progress("decompress", iters);
   }
 
   printf("ok.\n");
 
   return 0;
 }
-

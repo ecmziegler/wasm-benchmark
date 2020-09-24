@@ -1,3 +1,7 @@
 profiles:
-    compress-decompress:
+    compress:
         binary: lzma_bench
+        arguments: [compress]
+    decompress:
+        binary: lzma_bench
+        arguments: [decompress]
