@@ -1,3 +1,7 @@
 profiles:
-    compress-decompress:
+    compress:
         binary: zlib_bench
+        arguments: [compress]
+    decompress:
+        binary: zlib_bench
+        arguments: [decompress]
