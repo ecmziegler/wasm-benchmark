@@ -72,7 +72,7 @@ ProgressRecorder::Analysis ProgressRecorder::analyze() const {
 
   Analysis analysis{start_up_iterator->time, 0, 0, data_.back().time, 0.0, 0.0};
   
-  // Fit peak performance and determine ramp-up time.
+  // Fit peak performance and determine warm-up time.
   const auto last_iterator = data_.end() - 1;
   const auto last_reliable_iterator = last_iterator - 1;  // Skip last value as it might contain additional clean-up time.
   double previous_error = std::numeric_limits<double>::max();
@@ -86,7 +86,7 @@ ProgressRecorder::Analysis ProgressRecorder::analyze() const {
     }
     error /= last_iterator - warm_up_iterator;
     if (error < previous_error) {
-      analysis.warm_up_time = warm_up_iterator->time - start_up_iterator->time;
+      analysis.warm_up_time = 2.0 * (last_reliable_iterator->time - analysis.start_up_time - last_reliable_iterator->work / performance);
       analysis.effective_start_up_time = effective_start_up_time;
       analysis.peak_performance = performance;
       previous_error = error;
