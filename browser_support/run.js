@@ -13,22 +13,34 @@ process.env['PATH'] = `browser_support/node_modules/chromedriver/bin:browser_sup
 const server = new express();
 server.use(express.static('.'));
 
+function timed(promise, timeout) {
+  const timeout_error = new Error('Operation timed out');
+  const stack = timeout_error.stack.split('\n');
+  stack.splice(1,1);
+  timeout_error.stack = stack.join('\n');
+  return Promise.race([
+    promise,
+    new Promise((resolve, reject) => setTimeout(() => reject(timeout_error), timeout))
+  ]);
+}
+
 async function benchmark(port, url_path, output_file) {
-  const driver = await new webdriver.Builder()
+  const driver = await timed(new webdriver.Builder()
     .forBrowser(browser_name)
-    .setChromeOptions(new chrome.Options().addArguments('--headless'))
+    .setChromeOptions(new chrome.Options().headless())
     .setFirefoxOptions(new firefox.Options().headless())
-    .build();
+    .build(), 10000);
   try {
-    await driver.get(`http://localhost:${port}/${url_path}`);
-    await driver.wait(webdriver.until.elementLocated(webdriver.By.id('output')), 60000);
-    const output = await driver.findElement(webdriver.By.id('output')).getText();
-    await Promise.all([
+    await timed(driver.get(`http://localhost:${port}/${url_path}`), 5000);
+    await timed(driver.wait(webdriver.until.elementLocated(webdriver.By.id('output')), 60000), 60000);
+    const output = await timed(driver.findElement(webdriver.By.id('output')).getText(), 5000);
+    await timed(Promise.all([
       fs.promises.writeFile(output_file, output),
       driver.quit()
-    ]);
+    ]), 5000);
+    console.log("File written & browser exited");
   } catch (exception) {
-    await driver.quit();
+    await timed(driver.quit(), 5000);
     throw exception;
   }
 }
