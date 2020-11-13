@@ -1,0 +1,4 @@
+profiles:
+    string:
+        binary: string_bench
+        arguments: ['100']

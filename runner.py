@@ -20,7 +20,7 @@ allowed_steps = {'build', 'run', 'analyze'}
 native_envs = {'native'}
 wasm_envs = {'d8', 'chrome', 'mozjs', 'firefox'}
 allowed_envs = native_envs | wasm_envs
-allowed_benchmarks = {'base64', 'zlib', 'box2d', 'lzma'}
+allowed_benchmarks = {'base64', 'zlib', 'box2d', 'lzma', 'micro'}
 whitespace = re.compile('\s')
 
 class Analysis:
