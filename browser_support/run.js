@@ -28,7 +28,11 @@ async function benchmark(port, url_path, output_file) {
   const driver = await timed(new webdriver.Builder()
     .forBrowser(browser_name)
     .setChromeOptions(new chrome.Options().headless())
-    .setFirefoxOptions(new firefox.Options().headless())
+    .setFirefoxOptions(new firefox.Options()
+      .setPreference('privacy.reduceTimerPrecision', false)
+      .setPreference('privacy.resistFingerprinting', false)
+      .setPreference('services.sync.prefs.sync.privacy.resistFingerprinting.reduceTimerPrecision.jitter', false)
+      .headless())
     .build(), 10000);
   try {
     await timed(driver.get(`http://localhost:${port}/${url_path}`), 5000);
@@ -38,7 +42,6 @@ async function benchmark(port, url_path, output_file) {
       fs.promises.writeFile(output_file, output),
       driver.quit()
     ]), 5000);
-    console.log("File written & browser exited");
   } catch (exception) {
     await timed(driver.quit(), 5000);
     throw exception;

@@ -20,7 +20,7 @@ allowed_steps = {'build', 'run', 'analyze'}
 native_envs = {'native'}
 wasm_envs = {'d8', 'chrome', 'mozjs', 'firefox'}
 allowed_envs = native_envs | wasm_envs
-allowed_benchmarks = {'base64', 'zlib', 'box2d', 'lzma', 'micro'}
+allowed_benchmarks = {'base64', 'zlib', 'box2d', 'lzma', 'micro', 'sqlite'}
 whitespace = re.compile('\s')
 
 class Analysis:
@@ -267,7 +267,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
-					self.envs -= 'native'
+					self.envs.remove('native')
 
 		# d8 execution
 		if 'd8' in self.envs:
@@ -304,7 +304,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
-					self.envs -= 'd8'
+					self.envs.remove('d8')
 				if self.run_profiler:
 					self.call([
 						'perf',
@@ -334,7 +334,7 @@ class Benchmark:
 					if return_code != 0:
 						sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 						sys.stderr.flush()
-						self.envs -= browser
+						self.envs.remove(browser)
 
 		# Node execution
 		if 'node' in self.envs:
@@ -354,7 +354,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
-					self.envs -= 'node'
+					self.envs.remove('node')
 
 		# mozjs execution
 		if 'mozjs' in self.envs:
@@ -378,7 +378,7 @@ class Benchmark:
 				if return_code != 0:
 					sys.stderr.write('Execution failed with status {status}\n'.format(status = return_code))
 					sys.stderr.flush()
-					self.envs -= 'mozjs'
+					self.envs.remove('mozjs')
 
 	def analyze (self, format):
 		performances_figure = plt.figure()
@@ -473,6 +473,7 @@ class Benchmark:
 				progress_axes.legend(loc = 'lower right')
 				with open(os.path.join(base_dir, 'out', self.name, '{profile}.{format}'.format(profile = profile.name, format = format)), 'w') as file:
 					progress_figure.savefig(file, format = format)
+				plt.close(progress_figure)
 				
 				overview.write('\t<img src="{}">\n'.format(os.path.join(base_dir, 'out', self.name, '{profile}.{format}'.format(profile = profile.name, format = format))))
 				
@@ -490,6 +491,7 @@ class Benchmark:
 			performances_axes.legend(handles = [matplotlib.patches.Patch(facecolor = color, label = label) for label, color in summary_legend_labels.items()], loc = 'lower right')
 			with open(os.path.join(base_dir, 'out', self.name, 'performance.{format}'.format(format = format)), 'w') as file:
 				performances_figure.savefig(file, format = format)
+			plt.close(performances_figure)
 
 			times_axes.bar(summary_positions, start_up_times, 1, color = summary_colors)
 			times_axes.bar(summary_positions, warm_up_times, 1, bottom = start_up_times, color = summary_colors, edgecolor = 'white', hatch = '//')
@@ -500,6 +502,7 @@ class Benchmark:
 			times_axes.legend(handles = [matplotlib.patches.Patch(facecolor = color, label = label) for label, color in summary_legend_labels.items()], loc = 'lower right')
 			with open(os.path.join(base_dir, 'out', self.name, 'times.{format}'.format(format = format)), 'w') as file:
 				times_figure.savefig(file, format = format)
+			plt.close(times_figure)
 
 			overview.write('\t<img src="{performance}">\n\t<img src="{times}">\n</body>\n</html>\n'.format(performance = os.path.join(base_dir, 'out', self.name, 'performance.{format}'.format(format = format)), times = os.path.join(base_dir, 'out', self.name, 'times.{format}'.format(format = format))))
 

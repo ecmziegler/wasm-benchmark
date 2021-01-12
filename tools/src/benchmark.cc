@@ -113,8 +113,15 @@ std::ostream& operator<<(std::ostream& os, const Benchmark& benchmark) {
   for (const auto& progress_recorder : benchmark.progress_recorders_) {
     os << "\n[PROGRESS " << progress_recorder.first << "]\n";
 
+    size_t last_time_stamp = 0;
     for (const ProgressRecorder::DataPoint& data_point : progress_recorder.second.data_)
-      os << data_point.time << '\t' << data_point.work << '\n';
+    {
+      if (last_time_stamp < data_point.time)
+      {
+        os << data_point.time << '\t' << data_point.work << '\n';
+        last_time_stamp = data_point.time;
+      }
+    }
 
     ProgressRecorder::Analysis analysis = progress_recorder.second.analyze();
     os
