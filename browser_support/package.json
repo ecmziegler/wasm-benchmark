@@ -4,10 +4,10 @@
   "description": "Benchmark runner using puppeteer",
   "main": "run.js",
   "dependencies": {
-    "chromedriver": "^87.0.5",
+    "chromedriver": "latest",
     "express": "^4.17.1",
-    "geckodriver": "^1.21.1",
-    "selenium-webdriver": "^4.0.0-alpha.8"
+    "geckodriver": "latest",
+    "selenium-webdriver": "latest"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

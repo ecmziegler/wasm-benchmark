@@ -37,7 +37,7 @@ async function benchmark(port, url_path, output_file) {
   try {
     await timed(driver.get(`http://localhost:${port}/${url_path}`), 5000);
     await timed(driver.wait(webdriver.until.elementLocated(webdriver.By.id('output')), 60000), 60000);
-    const output = await timed(driver.findElement(webdriver.By.id('output')).getText(), 5000);
+    const output = await timed(driver.findElement(webdriver.By.id('output')).getAttribute('innerText'), 5000);
     await timed(Promise.all([
       fs.promises.writeFile(output_file, output),
       driver.quit()

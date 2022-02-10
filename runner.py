@@ -5,6 +5,7 @@ import sys
 import re
 import json
 import subprocess
+from platform import system as platform
 from shlex import quote
 from argparse import ArgumentParser
 from yaml import load as yaml_load
@@ -19,6 +20,8 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 allowed_steps = {'build', 'run', 'analyze'}
 native_envs = {'native'}
 wasm_envs = {'d8', 'chrome', 'mozjs', 'firefox'}
+if platform() == 'Darwin':
+	wasm_envs.add('safari')
 allowed_envs = native_envs | wasm_envs
 allowed_benchmarks = {'base64', 'zlib', 'box2d', 'lzma', 'micro', 'sqlite'}
 whitespace = re.compile('\s')
@@ -315,7 +318,7 @@ class Benchmark:
 					], cwd = os.path.dirname(profile.wasm_binary))
 
 		# Chrome & Firefox execution
-		for browser in 'chrome', 'firefox':
+		for browser in 'chrome', 'firefox', 'safari':
 			if browser in self.envs:
 				for profile in self.profiles:
 					print('Benchmarking {benchmark} {profile} in {browser}'.format(benchmark = self.name, profile = profile.name, browser = browser.capitalize()))
@@ -400,11 +403,12 @@ class Benchmark:
 		summary_labels = []
 		summary_legend_labels = {env: color for env, color in {
 				'native': 'gray',
-				'd8': 'cornflowerblue',
-				'chrome': 'lightsteelblue',
+				'd8': 'darkolivegreen',
+				'chrome': 'darkgreen',
 				'node': 'darkorange',
 				'mozjs': 'coral',
-				'firefox': 'crimson'
+				'firefox': 'crimson',
+				'safari': 'cornflowerblue'
 			}.items() if env in self.envs}
 		position = 0
 		with open(os.path.join(base_dir, 'out', self.name, 'overview.html'), 'w') as overview:
